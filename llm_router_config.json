@@ -1,0 +1,91 @@
+{
+  "_comment": "gBrain / Hermes multi-LLM failover chain. Providers are tried in ascending priority order. The wrapper (llm_router.py) reads this file. Model IDs and API keys are the ONLY things you normally edit.",
+  "router": {
+    "default_max_tokens": 4096,
+    "default_temperature": 0.2,
+    "global_timeout_seconds": 90,
+    "cost_log_path": "logs/llm_cost_log.jsonl",
+    "fail_open": false,
+    "_fail_open_note": "If true, a request that exhausts every provider returns an error object instead of raising. Keep false so Hermes can decide what to do."
+  },
+  "failover": {
+    "_comment": "Conditions that make the router ABANDON the current provider and move to the next one. A non-matching error (e.g. a malformed prompt / 400 bad_request) is treated as fatal and is NOT failed over, because the next provider would fail identically.",
+    "trigger_status_codes": [408, 409, 429, 500, 502, 503, 504, 529],
+    "trigger_error_substrings": [
+      "rate limit",
+      "rate_limit",
+      "quota",
+      "insufficient_quota",
+      "insufficient quota",
+      "billing",
+      "credit balance is too low",
+      "usage limit",
+      "resource_exhausted",
+      "resource exhausted",
+      "overloaded",
+      "capacity",
+      "temporarily unavailable",
+      "server had an error",
+      "service unavailable"
+    ],
+    "retry_same_provider": {
+      "_comment": "Transient errors (429/5xx) are retried on the SAME provider before failing over, honoring any Retry-After header. Hard quota/billing errors skip straight to the next provider.",
+      "max_attempts": 2,
+      "backoff_seconds": [2, 4],
+      "hard_quota_substrings": [
+        "insufficient_quota",
+        "insufficient quota",
+        "credit balance is too low",
+        "billing_hard_limit_reached",
+        "usage limit",
+        "quota"
+      ]
+    }
+  },
+  "providers": [
+    {
+      "name": "openai",
+      "label": "OpenAI Codex (primary)",
+      "priority": 1,
+      "enabled": true,
+      "api_key_env": "OPENAI_API_KEY",
+      "model": "gpt-5.1",
+      "_model_note": "Set to the exact model your linked Codex/OpenAI account serves (e.g. gpt-5.1, gpt-5.1-codex, gpt-4.1). This is the model string, not the product name.",
+      "max_tokens": 4096,
+      "temperature": 0.2,
+      "timeout_seconds": 60,
+      "cost_per_1k_input_usd": 0.0025,
+      "cost_per_1k_output_usd": 0.01
+    },
+    {
+      "name": "anthropic",
+      "label": "Claude (secondary / backup)",
+      "priority": 2,
+      "enabled": true,
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "model": "claude-opus-4-8",
+      "_model_note": "claude-opus-4-8 is the current Opus. Use claude-sonnet-5 for cheaper high-volume fallback if desired.",
+      "max_tokens": 4096,
+      "temperature": 0.2,
+      "adaptive_thinking": false,
+      "_thinking_note": "Set adaptive_thinking true to let Claude reason on hard prompts (adds latency/cost). Leave false for drop-in parity with the other providers.",
+      "timeout_seconds": 60,
+      "cost_per_1k_input_usd": 0.005,
+      "cost_per_1k_output_usd": 0.025
+    },
+    {
+      "name": "gemini",
+      "label": "Gemini (tertiary / final fallback)",
+      "priority": 3,
+      "enabled": true,
+      "api_key_env": "GEMINI_API_KEY",
+      "model": "gemini-2.5-pro",
+      "_model_note": "Set to the exact Gemini model your key can access (e.g. gemini-2.5-pro, gemini-2.5-flash).",
+      "max_tokens": 4096,
+      "temperature": 0.2,
+      "timeout_seconds": 60,
+      "cost_per_1k_input_usd": 0.00125,
+      "cost_per_1k_output_usd": 0.01
+    }
+  ]
+}

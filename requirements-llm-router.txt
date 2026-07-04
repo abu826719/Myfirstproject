@@ -1,0 +1,5 @@
+# Install only the SDKs for providers you enable in llm_router_config.json.
+# The router imports each SDK lazily, so a disabled provider's SDK is optional.
+openai>=1.40.0
+anthropic>=0.40.0
+google-genai>=0.3.0
